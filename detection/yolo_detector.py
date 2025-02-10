@@ -1,22 +1,21 @@
 from ultralytics import YOLO
-from robot_navigation.config import MODEL_PATH, CLASS_MAPPING
+from robot_navigation.config import CLASS_MAPPING
 
-class YOLOv11Detector:
+class YoloDetector:
     def __init__(self, metrics, model_path):
         """
         :param metrics: A dict mapping object labels to an ObjectMetrics instance.
         """
         self.metrics = metrics
-
         self.model = YOLO(model_path, task='detect')
 
     def predict(self, frame):
         """Run inference on a frame."""
         return self.model.predict(frame, stream=False, device='cuda', verbose=False)
 
-    def extract_detections(self, predictions, frame_width, frame_height):
+    def extract_detections(self, frame, predictions):
         """
-        Given a YOLO result, extract a list of dictionaries for each detection.
+        Given a YOLO result as predictions, extract a list of dictionaries for each detection.
         Each dictionary contains:
         - label: the detected class label
         - bbox: [x1, y1, x2, y2] (in pixels)
@@ -27,6 +26,9 @@ class YOLOv11Detector:
         detections = []
         if not hasattr(predictions, 'boxes') or predictions.boxes is None:
             return detections
+
+        frame_width = frame.shape[1]
+        frame_height = frame.shape[0]
 
         for box in predictions.boxes:
             xyxy = box.xyxy[0].cpu().numpy().tolist()  # [x1, y1, x2, y2]
@@ -56,7 +58,7 @@ class YOLOv11Detector:
             })
         return detections
     
-    def detect(self, frame, frame_width, frame_height):
-        predictions = self.predict(frame=frame)
-        detections = self.extract_detections(predictions[0], frame_width, frame_height)
+    def detect(self, frame):
+        predictions = self.predict(frame)
+        detections = self.extract_detections(frame, predictions[0])
         return detections

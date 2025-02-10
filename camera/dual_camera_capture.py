@@ -1,18 +1,14 @@
 import cv2
-import numpy as np
 import time
 import threading
 import os
 
 class DualCameraCapture:
-    def __init__(self, detector, robot_ip="192.168.129.84", stream_port=8554, num_cams=2):
-        self.stream_urls = [f"rtsp://{robot_ip}:{stream_port}/cam{i}" for i in range(num_cams)]
-        self.window_name = "Robot Cameras (Autonomous Mode)"
-        self.frames = {i: None for i in range(num_cams)}
-        self.detections = {i: None for i in range(num_cams)}
+    def __init__(self, stream1_url, stream2_url):
+        self.stream_urls = [stream1_url, stream2_url]
+        self.frames = {i: None for i in range(2)}
         self.running = True
         self.threads = []
-        self.detector = detector
 
     def open_camera_stream(self, cam_index):
         attempts = 0
@@ -38,14 +34,8 @@ class DualCameraCapture:
         while self.running:
             ret, frame = cap.read()
             if ret:
-                frame_height, frame_width = frame.shape[:2]
-
-                # Run inference and extract detections without using the built-in drawing.
-                detections = self.detector.detect(frame, frame_width, frame_height)
-
-                # Use the raw frame (without YOLO's labels) so our boxes can be drawn
+                # Save a copy of the raw frame
                 self.frames[cam_index] = frame.copy()
-                self.detections[cam_index] = detections
             else:
                 print(f"Failed to grab frame from cam{cam_index}")
                 time.sleep(0.1)
@@ -61,43 +51,3 @@ class DualCameraCapture:
         self.running = False
         for thread in self.threads:
             thread.join()
-
-    def draw_enriched_frame(self, frame, detections):
-        """
-        Draw bounding boxes and labels with enriched distance information.
-        """
-        for det in detections:
-            bbox = det["bbox"]
-            label = det.get("label", "object")
-
-            # Append the estimated distance to the label if available.
-            if "distance" in det:
-                display_text = f"{label} {det['confidence']:.2f}%: {det['distance']:.2f}m"
-            else:
-                display_text = f"{label} {det['confidence']:.2f}%: ??m"
-
-            # Convert coordinates to integers.
-            x1, y1, x2, y2 = map(int, bbox)
-            # Draw rectangle around the object.
-
-            if label == "robot":
-                color = (255, 0, 0)
-            else:
-                color = (0, 255, 0)
-
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(frame, display_text, (x1, max(y1 - 10, 0)), cv2.FONT_HERSHEY_DUPLEX, 1, color, 1)
-        return frame
-
-    def show(self):
-        if all(frame is not None for frame in self.frames.values()):
-            processed_frames = []
-            for i in sorted(self.frames.keys()):
-                frame_copy = self.frames[i].copy()
-                if self.detections[i]:
-                    frame_copy = self.draw_enriched_frame(frame_copy, self.detections[i])
-                processed_frames.append(frame_copy)
-            combined_frame = np.hstack(tuple(processed_frames))
-            cv2.imshow(self.window_name, combined_frame)
-
-
