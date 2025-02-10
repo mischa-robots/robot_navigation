@@ -13,7 +13,15 @@ class DualCameraRenderer:
         """
         processed_frames = []
         for i in sorted(frames.keys()):
+            if frames[i] is None:
+                continue
             frame_copy = frames[i].copy()
             processed_frames.append(frame_copy)
+        if not processed_frames:
+            return
+
         combined_frame = np.hstack(tuple(processed_frames))
+        # Print only the shape of the combined frame to avoid flooding the console.
+        #print("[DEBUG] got frames, combined shape:", combined_frame.shape, flush=True)
+
         cv2.imshow(self.window_name, combined_frame)
