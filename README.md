@@ -2,7 +2,7 @@
 
 An autonomous robot navigation system powered by computer vision and AI, designed to enable robots to perceive their environment and navigate safely using dual camera streams.
 
-![Robot](/assets/robot01.png)
+![Robot](/assets/robots01.jpg)
 
 ## Overview
 
