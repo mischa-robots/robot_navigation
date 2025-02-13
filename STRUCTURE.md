@@ -15,19 +15,21 @@ https://github.com/mischa-robots/robot_navigation
 ## project structure
 
 ```
-Directory structure:
+Project Directory structure:
 └── robot_navigation/
-    ├── README.md
-    ├── LICENSE
-    ├── STRUCTURE.md
     ├── __init__.py
     ├── config.py
     ├── main.py
+    ├── assets/
     ├── camera/
     │   ├── __init__.py
-    │   └── dual_camera_capture.py
+    │   ├── dual_camera_capture.py
+    │   ├── frame_cropper.py
+    │   ├── frame_cropper_cuda.py
+    │   └── frame_cropper_pytorch.py
     ├── data/
     │   ├── __init__.py
+    │   ├── crop_calibration.json
     │   ├── distances.json
     │   ├── metrics_loader.py
     │   ├── object_metrics.py
@@ -60,7 +62,6 @@ Directory structure:
     └── visualizing/
         ├── __init__.py
         └── frame_visualizer.py
-
 ```
 
 ## file contents description
@@ -77,7 +78,7 @@ File: main.py
 Main entry point that initializes and orchestrates the robot navigation system. Sets up camera captures, object detection, tracking, visualization, and autonomous navigation components. Implements a main loop that processes frames and handles user input for toggling autonomous mode and visualization options.
 
 Key components initialized:
-- Dual camera capture
+- Dual camera capture with optional cropping for camera adjustment (config based)
 - YOLO object detector
 - Stereo tracker
 - Frame visualizer
@@ -92,6 +93,26 @@ Handles dual camera stream capture using OpenCV. Uses threading to continuously 
 - Multi-threaded frame capture
 - Frame buffering
 - Graceful shutdown handling
+
+================================================
+File: frame_cropper.py
+================================================
+CPU-based implementation of frame cropping for stereo camera feeds.
+Uses NumPy optimizations for efficient frame cropping operations.
+
+================================================
+File: frame_cropper_cuda.py
+================================================
+CUDA-accelerated implementation using OpenCV's GPU module for high-performance frame cropping.
+Leverages direct GPU memory operations for stereo camera feeds. Main features:
+- GPU memory pre-allocation and CUDA stream management for asynchronous operations
+
+================================================
+File: frame_cropper_pytorch.py
+================================================
+PyTorch-based GPU implementation for frame cropping using tensor operations.
+Provides flexible GPU acceleration with PyTorch's CUDA support. Main features:
+- Automatic GPU/CPU device selection and PyTorch tensor-based operations
 
 ================================================
 File: data/distances.json
