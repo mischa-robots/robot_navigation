@@ -3,31 +3,39 @@ import cv2
 import threading
 import time
 
-from robot_navigation.config import DISTANCES_PATH, MODEL_PATH
+from robot_navigation.config import DISTANCES_PATH, MODEL_PATH, CROP_PATH
+from robot_navigation.camera.dual_camera_capture import DualCameraCapture
+from robot_navigation.camera.frame_cropper_pytorch import FrameCropper
 from robot_navigation.data.metrics_loader import MetricsLoader
 from robot_navigation.data.sensor_data_hub import SensorDataHub
 from robot_navigation.detection.yolo_detector import YoloDetector
 from robot_navigation.tracking.stereo_tracker import StereoTracker
 from robot_navigation.visualizing.frame_visualizer import FrameVisualizer
 from robot_navigation.processing.frame_processor import FrameProcessor
-from robot_navigation.camera.dual_camera_capture import DualCameraCapture
 from robot_navigation.network.websocket_client import WebSocketClient
 from robot_navigation.navigation.autonomous_navigator import AutonomousNavigator
 from robot_navigation.navigation.reactive_behavior_strategy import ReactiveBehaviorStrategy
 from robot_navigation.rendering.dual_camera_renderer import DualCameraRenderer
 from robot_navigation.rendering.sensor_data_renderer import SensorDataRenderer
 
-def frame_processing_loop(capture, frame_processor):
+def frame_processing_loop(capture, frame_processor, frame_cropper, stop_event):
     """Continuously process frames and update the SensorDataHub."""
-    while True:
-        left_frame = capture.frames.get(0)
-        right_frame = capture.frames.get(1)
-        if left_frame is not None and right_frame is not None:
-            frame_processor.process_and_update(left_frame, right_frame)
-        else:
-            #print("[DEBUG] waiting for frames", flush=True)
-            time.sleep(1)
-        time.sleep(0.05)
+    while not stop_event.is_set():
+        try:
+            left_frame = capture.frames.get(0)
+            right_frame = capture.frames.get(1)
+
+            if left_frame is not None and right_frame is not None:
+                # Process frames in chunks
+                left_frame, right_frame = frame_cropper.crop_frames(left_frame, right_frame)
+                if left_frame is not None and right_frame is not None:
+                    frame_processor.process_and_update(left_frame, right_frame)
+            else:
+                time.sleep(0.01)  # Reduced sleep time for better responsiveness
+                
+        except Exception as e:
+            print(f"Error in processing loop: {e}")
+            time.sleep(0.1)
 
 def main():
     # Parse command-line arguments.
@@ -35,12 +43,17 @@ def main():
     stream_port = int(sys.argv[2]) if len(sys.argv) > 2 else 8554
     ws_port = int(sys.argv[3]) if len(sys.argv) > 3 else 8000
 
+    stop_event = threading.Event()
+
     # Load distance metrics.
     metrics_loader = MetricsLoader(DISTANCES_PATH)
     metrics = metrics_loader.load_metrics()
 
     # Initialize object detection model.
     detector = YoloDetector(metrics, MODEL_PATH)
+
+    # Initialize frame cropper for horizontal frames adjustment
+    cropper = FrameCropper(CROP_PATH)
 
     # Initialize a camera capture module
     stream1_url = f"rtsp://{robot_ip}:{stream_port}/cam0"
@@ -62,7 +75,7 @@ def main():
     frame_processor = FrameProcessor(sensor_data_hub, detector, tracker, visualizer)
 
     # Start a thread for frame processing.
-    processing_thread = threading.Thread(target=frame_processing_loop, args=(capture, frame_processor), daemon=True)
+    processing_thread = threading.Thread(target=frame_processing_loop, args=(capture, frame_processor, cropper, stop_event), daemon=True)
     processing_thread.start()
 
     # Initialize the DualCameraRenderer for displaying frames.
@@ -115,6 +128,14 @@ def main():
     except KeyboardInterrupt:
         print("Keyboard interrupt received, shutting down.")
     finally:
+        # Signal the processing thread to stop
+        stop_event.set()
+        # Wait for the processing thread to finish
+        if processing_thread.is_alive():
+            processing_thread.join(timeout=2.0)
+        # Clean up GPU resources
+        cropper.cleanup()
+
         ws_client.send_command(0, 0)
         # If the navigator was started, stop it.
         if 'navigator' in locals():
