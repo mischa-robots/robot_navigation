@@ -10,8 +10,8 @@ class FrameProcessor:
     def process_and_update(self, left_frame, right_frame) -> SensorData:
 
         # Run detection on each frame.
-        left_detections = self.detector.detect(left_frame)
-        right_detections = self.detector.detect(right_frame)
+        left_detections = self.detector.detect(left_frame, 'left')
+        right_detections = self.detector.detect(right_frame, 'right')
 
         # Update the tracker with the detections.
         tracking_objects = self.tracker.update(left_detections, right_detections)

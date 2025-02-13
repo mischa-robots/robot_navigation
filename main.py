@@ -31,7 +31,7 @@ def frame_processing_loop(capture, frame_processor, frame_cropper, stop_event):
                 if left_frame is not None and right_frame is not None:
                     frame_processor.process_and_update(left_frame, right_frame)
             else:
-                time.sleep(0.01)  # Reduced sleep time for better responsiveness
+                time.sleep(0.01)
                 
         except Exception as e:
             print(f"Error in processing loop: {e}")
@@ -123,7 +123,7 @@ def main():
             else:
                 #print("[DEBUG] no sensor data available !")
                 dual_camera_renderer.show(capture.frames)
-                time.sleep(0.1)
+                #time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("Keyboard interrupt received, shutting down.")
