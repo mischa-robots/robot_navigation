@@ -2,14 +2,12 @@ from ultralytics import YOLO
 from robot_navigation.config import CLASS_MAPPING
 
 class YoloDetector:
-    def __init__(self, metrics, model_path, detection_memory_size=5, memory_threshold=2, iou_threshold=0.3):
+    def __init__(self, model_path, detection_memory_size=5, memory_threshold=2, iou_threshold=0.3):
         """
-        :param metrics: A dict mapping object labels to an ObjectMetrics instance.
         :param detection_memory_size: Number of frames to remember for temporal smoothing.
         :param memory_threshold: Minimum number of past frames in which a similar detection must appear.
         :param iou_threshold: IoU threshold to consider two detections as matching.
         """
-        self.metrics = metrics
         self.model = YOLO(model_path, task='detect')
         # Maintain separate detection histories per camera (e.g., 'left' and 'right')
         self.detection_history = {}
@@ -29,7 +27,6 @@ class YoloDetector:
         - bbox: [x1, y1, x2, y2] (in pixels)
         - confidence: confidence score (float)
         - camera_width, camera_height: for computing relative area
-        - distance: estimated distance based on metrics
         """
         detections = []
         if not hasattr(predictions, 'boxes') or predictions.boxes is None:
@@ -44,29 +41,12 @@ class YoloDetector:
             cls_id = int(box.cls[0])
             label = CLASS_MAPPING.get(cls_id, str(cls_id))
 
-            detection_height = xyxy[3] - xyxy[1]
-            observed_height_ratio = detection_height / frame_height
-            metrics = self.metrics[label]
-
-            # Simple distance estimation using linear interpolation between min and max metrics.
-            if observed_height_ratio <= metrics.min_height_ratio:
-                estimated_distance = metrics.estimated_max_distance
-            elif observed_height_ratio >= metrics.max_height_ratio:
-                estimated_distance = metrics.estimated_min_distance
-            else:
-                estimated_distance = metrics.estimated_min_distance + (
-                    metrics.estimated_max_distance - metrics.estimated_min_distance
-                ) * (1 / observed_height_ratio - 1 / metrics.max_height_ratio) / (
-                    1 / metrics.min_height_ratio - 1 / metrics.max_height_ratio
-                )
-
             detections.append({
                 "label": label,
                 "bbox": xyxy,
                 "confidence": conf,
                 "camera_width": frame_width,
-                "camera_height": frame_height,
-                "distance": estimated_distance
+                "camera_height": frame_height
             })
         return detections
 

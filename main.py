@@ -9,10 +9,12 @@ from robot_navigation.camera.dual_camera_capture import DualCameraCapture
 from robot_navigation.camera.frame_cropper_pytorch import FrameCropper
 from robot_navigation.data.metrics_loader import MetricsLoader
 from robot_navigation.data.sensor_data_hub import SensorDataHub
+from robot_navigation.detection.distance_estimator import DistanceEstimator
 from robot_navigation.detection.yolo_detector import YoloDetector
 from robot_navigation.visualizing.frame_visualizer import FrameVisualizer
 from robot_navigation.processing.processing_pipeline_manager import ProcessingPipelineManager
 from robot_navigation.processing.detection_processor import DetectionProcessor
+from robot_navigation.processing.distance_estimation_processor import DistanceEstimationProcessor
 from robot_navigation.processing.tracking_processor import TrackingProcessor
 from robot_navigation.processing.visualizing_processor import VisualizingProcessor
 from robot_navigation.network.websocket_client import WebSocketClient
@@ -20,6 +22,7 @@ from robot_navigation.navigation.autonomous_navigator import AutonomousNavigator
 from robot_navigation.navigation.reactive_behavior_strategy import ReactiveBehaviorStrategy
 from robot_navigation.rendering.dual_camera_renderer import DualCameraRenderer
 from robot_navigation.rendering.sensor_data_renderer import SensorDataRenderer
+from robot_navigation.tracking.deepsort_tracker import DeepSortTracker
 
 def frame_processing_loop(capture, processing_pipeline_manager: ProcessingPipelineManager, frame_cropper, stop_event):
     """Continuously process frames and update the SensorDataHub."""
@@ -52,10 +55,8 @@ def main():
     metrics = metrics_loader.load_metrics()
 
     # Initialize object detection model
-    detector = YoloDetector(metrics, MODEL_PATH)
-
-    # Set GStreamer debug level
-    os.environ['GST_DEBUG'] = '3'
+    detector = YoloDetector(MODEL_PATH)
+    distance_estimator = DistanceEstimator(metrics)
 
     # Initialize camera capture
     stream1_url = f"rtsp://{robot_ip}:{stream_port}/cam0"
@@ -67,7 +68,7 @@ def main():
     cropper = FrameCropper(CROP_PATH)
 
     # Initialize tracker (can be None if disabled)
-    tracker = None
+    tracker = DeepSortTracker()
 
     # Initialize frame visualizer
     visualizer = FrameVisualizer()
@@ -78,6 +79,7 @@ def main():
     # Initialize Processing Pipeline Manager
     processing_pipeline_manager = ProcessingPipelineManager(sensor_data_hub)
     processing_pipeline_manager.register_module(DetectionProcessor(detector))
+    processing_pipeline_manager.register_module(DistanceEstimationProcessor(distance_estimator))
     processing_pipeline_manager.register_module(TrackingProcessor(tracker))
     processing_pipeline_manager.register_module(VisualizingProcessor(visualizer))
 
