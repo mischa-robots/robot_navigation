@@ -7,16 +7,19 @@ class FrameVisualizer:
         self.robot_color = (255, 0, 0)
         self.wall_color = (0, 255, 0)
         self.corner_color = (0, 0, 255)
+        self.track_color = (0, 255, 255)
 
-    def draw_enriched_frame(self, frame, detections):
+    def draw_enriched_frame(self, frame, detections, tracking_objects=None):
         """
-        Draw bounding boxes, labels, and distance info on the frame.
+        Draw bounding boxes, labels, distance info, and tracking objects on the frame.
         
         :param frame: The image frame as a NumPy array.
         :param detections: List of detection dictionaries, where each dictionary should
                            have at least the keys "bbox", "label", "confidence", and optionally "distance".
+        :param tracking_objects: List of tracking dictionaries with keys "track_id", "position", "velocity", etc.
         :return: The annotated frame.
         """
+        # Draw detection bounding boxes.
         for det in detections:
             bbox = det.get("bbox")
             label = det.get("label", "object")
@@ -41,4 +44,18 @@ class FrameVisualizer:
             # Draw the bounding box and label.
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(frame, display_text, (x1, max(y1 - 10, 0)), self.font, 1, color, 1)
+        
+        # Draw tracking objects.
+        if tracking_objects is not None:
+            for track in tracking_objects:
+                # Assume the first two coordinates of the 'position' represent pixel coordinates.
+                pos = track.get("position", [0, 0])
+                x = int(pos[0])
+                y = int(pos[1])
+                track_id = track.get("track_id", -1)
+                
+                # Draw a small circle at the track position.
+                cv2.circle(frame, (x, y), 5, self.track_color, -1)
+                # Label the track with its ID.
+                cv2.putText(frame, f"ID:{track_id}", (x + 5, y - 5), self.font, 0.5, self.track_color, 1)
         return frame

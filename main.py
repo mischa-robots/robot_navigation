@@ -1,3 +1,4 @@
+import os
 import sys
 import cv2
 import threading
@@ -9,16 +10,18 @@ from robot_navigation.camera.frame_cropper_pytorch import FrameCropper
 from robot_navigation.data.metrics_loader import MetricsLoader
 from robot_navigation.data.sensor_data_hub import SensorDataHub
 from robot_navigation.detection.yolo_detector import YoloDetector
-from robot_navigation.tracking.stereo_tracker import StereoTracker
 from robot_navigation.visualizing.frame_visualizer import FrameVisualizer
-from robot_navigation.processing.frame_processor import FrameProcessor
+from robot_navigation.processing.processing_pipeline_manager import ProcessingPipelineManager
+from robot_navigation.processing.detection_processor import DetectionProcessor
+from robot_navigation.processing.tracking_processor import TrackingProcessor
+from robot_navigation.processing.visualizing_processor import VisualizingProcessor
 from robot_navigation.network.websocket_client import WebSocketClient
 from robot_navigation.navigation.autonomous_navigator import AutonomousNavigator
 from robot_navigation.navigation.reactive_behavior_strategy import ReactiveBehaviorStrategy
 from robot_navigation.rendering.dual_camera_renderer import DualCameraRenderer
 from robot_navigation.rendering.sensor_data_renderer import SensorDataRenderer
 
-def frame_processing_loop(capture, frame_processor, frame_cropper, stop_event):
+def frame_processing_loop(capture, processing_pipeline_manager: ProcessingPipelineManager, frame_cropper, stop_event):
     """Continuously process frames and update the SensorDataHub."""
     while not stop_event.is_set():
         try:
@@ -26,74 +29,79 @@ def frame_processing_loop(capture, frame_processor, frame_cropper, stop_event):
             right_frame = capture.frames.get(1)
 
             if left_frame is not None and right_frame is not None:
-                # Process frames in chunks
                 left_frame, right_frame = frame_cropper.crop_frames(left_frame, right_frame)
                 if left_frame is not None and right_frame is not None:
-                    frame_processor.process_and_update(left_frame, right_frame)
+                    processing_pipeline_manager.process_and_update(left_frame, right_frame)
             else:
                 time.sleep(0.01)
-                
+        
         except Exception as e:
             print(f"Error in processing loop: {e}")
             time.sleep(0.1)
 
 def main():
-    # Parse command-line arguments.
+    # Parse command-line arguments or set default values.
     robot_ip = sys.argv[1] if len(sys.argv) > 1 else "192.168.129.84"
     stream_port = int(sys.argv[2]) if len(sys.argv) > 2 else 8554
     ws_port = int(sys.argv[3]) if len(sys.argv) > 3 else 8000
 
     stop_event = threading.Event()
 
-    # Load distance metrics.
+    # Load distance metrics
     metrics_loader = MetricsLoader(DISTANCES_PATH)
     metrics = metrics_loader.load_metrics()
 
-    # Initialize object detection model.
+    # Initialize object detection model
     detector = YoloDetector(metrics, MODEL_PATH)
 
-    # Initialize frame cropper for horizontal frames adjustment
-    cropper = FrameCropper(CROP_PATH)
+    # Set GStreamer debug level
+    os.environ['GST_DEBUG'] = '3'
 
-    # Initialize a camera capture module
+    # Initialize camera capture
     stream1_url = f"rtsp://{robot_ip}:{stream_port}/cam0"
     stream2_url = f"rtsp://{robot_ip}:{stream_port}/cam1"
     capture = DualCameraCapture(stream1_url, stream2_url)
     capture.start()
 
-    # Initialize the stereo tracker.
-    calibration_data = {}  # Replace with actual calibration data if available.
-    tracker = StereoTracker(calibration_data)
+    # Initialize frame cropper
+    cropper = FrameCropper(CROP_PATH)
 
-    # Initialize the frame visualizer.
+    # Initialize tracker (can be None if disabled)
+    tracker = None
+
+    # Initialize frame visualizer
     visualizer = FrameVisualizer()
 
-    # Create a shared sensor data hub.
+    # Create a shared sensor data hub
     sensor_data_hub = SensorDataHub()
 
-    # Create the FrameProcessor with the sensor data hub.
-    frame_processor = FrameProcessor(sensor_data_hub, detector, tracker, visualizer)
+    # Initialize Processing Pipeline Manager
+    processing_pipeline_manager = ProcessingPipelineManager(sensor_data_hub)
+    processing_pipeline_manager.register_module(DetectionProcessor(detector))
+    processing_pipeline_manager.register_module(TrackingProcessor(tracker))
+    processing_pipeline_manager.register_module(VisualizingProcessor(visualizer))
 
-    # Start a thread for frame processing.
-    processing_thread = threading.Thread(target=frame_processing_loop, args=(capture, frame_processor, cropper, stop_event), daemon=True)
+    # Start frame processing in a separate thread
+    processing_thread = threading.Thread(
+        target=frame_processing_loop,
+        args=(capture, processing_pipeline_manager, cropper, stop_event),
+        daemon=True
+    )
     processing_thread.start()
 
-    # Initialize the DualCameraRenderer for displaying frames.
+    # Initialize the renderer
     dual_camera_renderer = DualCameraRenderer(window_name="Robot Navigation")
     renderer = SensorDataRenderer(dual_camera_renderer)
-
-    # Create a named window.
     cv2.namedWindow("Robot Navigation", cv2.WINDOW_NORMAL)
 
-    # Initialize the WebSocket client.
+    # Initialize WebSocket client
     ws_url = f"ws://{robot_ip}:{ws_port}/ws"
     ws_client = WebSocketClient(ws_url)
 
-    # Instantiate a navigation strategy.
+    # Instantiate navigation strategy
     strategy = ReactiveBehaviorStrategy()
 
-    # Optionally, instantiate the AutonomousNavigator.
-    # (If you remove or comment out the following line, the rest of the system will still run.)
+    # Initialize Autonomous Navigator
     navigator = AutonomousNavigator(sensor_data_hub, ws_client, strategy, decision_interval=0.5)
 
     print("Press ESC to exit.")
@@ -123,7 +131,6 @@ def main():
             else:
                 #print("[DEBUG] no sensor data available !")
                 dual_camera_renderer.show(capture.frames)
-                #time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("Keyboard interrupt received, shutting down.")

@@ -10,4 +10,5 @@ class SensorData:
     right_frame_visualized: np.ndarray = None
     left_detections: List[dict] = field(default_factory=list)
     right_detections: List[dict] = field(default_factory=list)
-    tracking_objects: List[Any] = field(default_factory=list)
+    left_tracking: List[Any] = field(default_factory=list)
+    right_tracking: List[Any] = field(default_factory=list)

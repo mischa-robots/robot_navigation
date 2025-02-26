@@ -9,20 +9,46 @@ class DualCameraCapture:
         self.frames = {i: None for i in range(2)}
         self.running = True
         self.threads = []
+        
+        # Check if GStreamer is available
+        self.use_gstreamer = self._check_gstreamer_available()
+        if self.use_gstreamer:
+            print("Using GStreamer backend for video capture")
+        else:
+            print("Using FFMPEG backend for video capture")
+
+    def _check_gstreamer_available(self):
+        # Create a simple test pipeline to check if GStreamer is available
+        test_pipeline = "videotestsrc num-buffers=1 ! appsink"
+        test_cap = cv2.VideoCapture(test_pipeline, cv2.CAP_GSTREAMER)
+        is_available = test_cap.isOpened()
+        test_cap.release()
+        return is_available
 
     def open_camera_stream(self, cam_index):
         attempts = 0
         cap = None
+        url = self.stream_urls[cam_index]
+        
         while attempts < 3:
-            cap = cv2.VideoCapture(self.stream_urls[cam_index], cv2.CAP_FFMPEG)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            if self.use_gstreamer:
+                # Use GStreamer pipeline
+                pipeline = f"rtspsrc location={url} protocols=tcp latency=0 ! rtph264depay ! h264parse ! nvh264dec ! videoconvert ! appsink"
+                cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+            else:
+                # Use FFMPEG
+                cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                
             if cap.isOpened():
-                print(f"Camera {cam_index} stream opened successfully.")
+                print(f"Camera {cam_index} stream opened successfully using {'GStreamer' if self.use_gstreamer else 'FFMPEG'}.")
                 return cap
             else:
                 attempts += 1
-                print(f"Attempt {attempts} to open camera {cam_index} stream at {self.stream_urls[cam_index]} failed, retrying in 5 seconds...")
+                backend = "GStreamer" if self.use_gstreamer else "FFMPEG"
+                print(f"Attempt {attempts} to open camera {cam_index} stream at {url} with {backend} failed, retrying in 5 seconds...")
                 time.sleep(5)
+        
         return None
 
     def capture_frames(self, cam_index):
