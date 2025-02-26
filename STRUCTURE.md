@@ -51,14 +51,19 @@ Project Directory structure:
     │   └── websocket_client.py
     ├── processing/
     │   ├── __init__.py
-    │   └── frame_processor.py
+    │   ├── depth_estimation_processor.py
+    │   ├── detection_processor.py
+    │   ├── processing_module.py
+    │   ├── processing_pipeline_manager.py
+    │   ├── tracking_processor.py
+    │   └── visualizing_processor.py
     ├── rendering/
     │   ├── __init__.py
     │   ├── dual_camera_renderer.py
     │   └── sensor_data_renderer.py
     ├── tracking/
     │   ├── __init__.py
-    │   └── stereo_tracker.py
+    │   └── empty_tracker.py
     └── visualizing/
         ├── __init__.py
         └── frame_visualizer.py
@@ -185,13 +190,42 @@ Handles WebSocket communication with robot:
 - Clean shutdown
 
 ================================================
-File: processing/frame_processor.py
+File: processing/depth_estimation_processor.py
 ================================================
-Coordinates frame processing pipeline:
-1. Object detection on both camera feeds
-2. Stereo tracking updates
-3. Frame visualization
-4. Sensor data hub updates
+Implements a processing module for depth estimation.
+
+================================================
+File: processing/detection_processor.py
+================================================
+Handles object detection processing for both camera frames. Main features:
+- Stores detection results in the SensorData object
+
+================================================
+File: processing/processing_module.py
+================================================
+Defines abstract base class (ABC) for all processing modules in the pipeline:
+- Establishes common interface for processing components with the process function
+- Enforces sensor data input/output contract
+
+================================================
+File: processing/processing_pipeline_manager.py
+================================================
+Orchestrates the modular processing pipeline. Main features:
+- Manages sequence of processing modules
+- Allows dynamic registration of modules
+- Creates and initializes SensorData object
+- Updates central SensorDataHub with processed results
+- Processes frames through the complete pipeline
+
+================================================
+File: processing/tracking_processor.py
+================================================
+Implements tracking module for object persistence.
+
+================================================
+File: processing/visualizing_processor.py
+================================================
+Handles visualization processing of detected and tracked objects.
 
 ================================================
 File: rendering/dual_camera_renderer.py
@@ -210,13 +244,9 @@ Manages visualization modes:
 - Handles missing/incomplete data
 
 ================================================
-File: tracking/stereo_tracker.py
+File: tracking/empty_tracker.py
 ================================================
-Implements 3D object tracking:
-- Kalman filter-based tracking
-- Stereo triangulation
-- Track management (creation/updating/deletion)
-- Motion prediction
+Implements object tracking: empty file as placeholder for future implementation
 
 ================================================
 File: visualizing/frame_visualizer.py
